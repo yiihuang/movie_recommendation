@@ -77,24 +77,24 @@ def rank(mat1, r):
         # Use predict_all for evaluation to get all movie rankings
         recommendations = r.predict_all(u)
         K = len(recommendations)
-        rank_u = np.zeros(n)
-        for m in range(n):
-            if m in recommendations :
-                rank_u[m] = recommendations.index(m)/(K-1)
         
-        for m in range(n): 
-            sum_numerator += mat1[u,m]*rank_u[m]
+        # Create efficient rank lookup: O(n) instead of O(n²)
+        rank_lookup = {movie: idx/(K-1) for idx, movie in enumerate(recommendations)}
+        
+        for m in range(n):
+            if m in rank_lookup:
+                sum_numerator += mat1[u, m] * rank_lookup[m]
     
     return(sum_numerator / sum_denominator)
     
 if __name__ == "__main__":
     
     '''Basic test of the algorithm'''
-    A = util.load_data_matrix()
-    # A = util.load_data_matrix()[:,:100] # if tested on a laptop, please use the first 100 movies 
+    # A = util.load_data_matrix()
+    A = util.load_data_matrix()[:,:100] # if tested on a laptop, please use the first 100 movies 
     print(A, A.shape)
     r = Ridge()
-    r.fit(A)
+    r.fit(A, max_iter=10)  # Reduced iterations for faster training
     
     # Get top 20 recommendations for user 1 (user-facing)
     recommendations = r.predict(1, K=20)
@@ -120,89 +120,119 @@ if __name__ == "__main__":
     for movie_id in k_list :
         print(B['movieId_movieName'][movie_id])
     
-    '''Choice of hyperparameters'''
-    A = util.load_data_matrix()
-    # A = util.load_data_matrix()[:,:100] # if tested on a laptop, please use the first 100 movies 
-    f_range = np.arange(100,400,20)
+    '''Choice of hyperparameters (optimized for speed)'''
+    # A = util.load_data_matrix()
+    A = util.load_data_matrix()[:,:100] # if tested on a laptop, please use the first 100 movies 
+    
+    # Reduced parameter ranges for faster execution
+    f_range = np.arange(50, 151, 50)  # Only test 3 values: 50, 100, 150
     ranks_f = []
-    alpha_range = np.arange(10, 80, 10)
+    alpha_range = np.arange(10, 51, 20)  # Only test 3 values: 10, 30, 50
     ranks_alpha = []
-    lambd_range = np.logspace(-1, 1, 10)
+    lambd_range = [0.01, 0.1, 1.0]  # Only test 3 values
     ranks_lambd = []
-    thres_range = np.arange(0, 3.5, 0.5)
+    thres_range = [0, 1.0, 2.0]  # Only test 3 values
     ranks_thres = []
 
-    k = 4
+    k = 2  # Reduced from 4 to 2 folds for faster cross-validation
     train_mats, val_mats, masks = util.k_cross(k=k)
 
+    print("\nRunning hyperparameter optimization (this may take a few minutes)...")
+
     '''Choice of f'''
+    print("Testing f values...")
     for f in f_range :
-        print(f)
+        print(f"  Testing f={f}")
         x=[]
         for i in range(k):
+            print(f"    Fold {i+1}/{k}...", end=" ")
             train_mat = train_mats[i]
             val_mat = val_mats[i]
             r = Ridge(f=f)
-            r.fit(train_mat)
+            r.fit(train_mat, max_iter=5)  # Reduced iterations
             x.append(rank(val_mat, r))
+            print("✓")
             
         ranks_f.append(np.mean(x)*100)
         
-    plt.plot(f_range,ranks_f)
+    plt.figure(figsize=(10, 6))
+    plt.subplot(2, 2, 1)
+    plt.plot(f_range,ranks_f, 'o-')
     plt.ylabel('expected percentile ranking (%)')
     plt.xlabel('f')
-    plt.show()
+    plt.title('Factor Dimension (f)')
 
     '''Choice of alpha'''
+    print("Testing alpha values...")
     for alpha in alpha_range :
-        print(alpha)
+        print(f"  Testing alpha={alpha}")
         x=[]
         for i in range(k):
+            print(f"    Fold {i+1}/{k}...", end=" ")
             train_mat = train_mats[i]
             val_mat = val_mats[i]
             r = Ridge(alpha=alpha)
-            r.fit(train_mat)
+            r.fit(train_mat, max_iter=5)  # Reduced iterations
             x.append(rank(val_mat, r))
+            print("✓")
             
         ranks_alpha.append(np.mean(x)*100)
         
-    plt.plot(alpha_range,ranks_alpha)
+    plt.subplot(2, 2, 2)
+    plt.plot(alpha_range,ranks_alpha, 'o-')
     plt.ylabel('expected percentile ranking (%)')
     plt.xlabel('alpha')
-    plt.show()
+    plt.title('Confidence Parameter (alpha)')
     
     '''Choice of lambda'''
+    print("Testing lambda values...")
     for lambd in lambd_range :
-        print(lambd)
+        print(f"  Testing lambda={lambd}")
         x=[]
         for i in range(k):
+            print(f"    Fold {i+1}/{k}...", end=" ")
             train_mat = train_mats[i]
             val_mat = val_mats[i]
             r = Ridge(lambd=lambd)
-            r.fit(train_mat)
+            r.fit(train_mat, max_iter=5)  # Reduced iterations
             x.append(rank(val_mat, r))
+            print("✓")
             
         ranks_lambd.append(np.mean(x)*100)
         
-    plt.semilogx(lambd_range,ranks_lambd)
+    plt.subplot(2, 2, 3)
+    plt.semilogx(lambd_range,ranks_lambd, 'o-')
     plt.ylabel('expected percentile ranking (%)')
     plt.xlabel('lambda')
-    plt.show()
+    plt.title('Regularization (lambda)')
 
     '''Choice of threshold'''
+    print("Testing threshold values...")
     for thres in thres_range :
-        print(thres)
+        print(f"  Testing threshold={thres}")
         x=[]
         for i in range(k):
+            print(f"    Fold {i+1}/{k}...", end=" ")
             train_mat = train_mats[i]
             val_mat = val_mats[i]
             r = Ridge(thres=thres)
-            r.fit(train_mat)
+            r.fit(train_mat, max_iter=5)  # Reduced iterations
             x.append(rank(val_mat, r))
+            print("✓")
             
         ranks_thres.append(np.mean(x)*100)
         
-    plt.plot(thres_range,ranks_thres)
+    plt.subplot(2, 2, 4)
+    plt.plot(thres_range,ranks_thres, 'o-')
     plt.ylabel('expected percentile ranking (%)')
     plt.xlabel('threshold')
+    plt.title('Preference Threshold')
+
+    plt.tight_layout()
     plt.show()
+    
+    print("\nHyperparameter optimization complete!")
+    print(f"Best f: {f_range[np.argmin(ranks_f)]}")
+    print(f"Best alpha: {alpha_range[np.argmin(ranks_alpha)]}")
+    print(f"Best lambda: {lambd_range[np.argmin(ranks_lambd)]}")
+    print(f"Best threshold: {thres_range[np.argmin(ranks_thres)]}")
