@@ -73,7 +73,7 @@ This dataset describes 5-star rating and free-text tagging activity from [MovieL
 Run the following command in your local terminal to download the project:
 
 ```bash
-
+git clone (*the project git repo*)
 ```
 ### Step 2: Setup Virtual Environment
 
